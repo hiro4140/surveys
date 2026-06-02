@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>観光地アンケート</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; background: #f5f4f0; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+.card { background: #fff; border-radius: 16px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); padding: 2rem 1.5rem; width: 100%; max-width: 480px; }
+h1 { font-size: 18px; font-weight: 700; color: #1a1a1a; margin-bottom: 0.25rem; }
+.subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+.progress-bar { height: 4px; background: #eee; border-radius: 2px; margin-bottom: 1.5rem; }
+.progress-fill { height: 4px; background: #3b82f6; border-radius: 2px; transition: width 0.3s; }
+.q-label { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 1rem; line-height: 1.5; }
+.option-btn { display: flex; align-items: center; gap: 10px; width: 100%; background: #fafafa; border: 1.5px solid #e5e5e5; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; font-size: 14px; color: #333; text-align: left; transition: all 0.15s; }
+.option-btn.selected { border-color: #3b82f6; background: #eff6ff; color: #1d4ed8; font-weight: 500; }
+.radio-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #d1d5db; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.option-btn.selected .radio-dot { border-color: #3b82f6; background: #3b82f6; }
+.radio-inner { width: 7px; height: 7px; border-radius: 50%; background: white; display: none; }
+.option-btn.selected .radio-inner { display: block; }
+.star-row { display: flex; gap: 10px; margin-bottom: 0.5rem; }
+.star { font-size: 36px; cursor: pointer; color: #d1d5db; transition: color 0.1s; user-select: none; }
+.star.on { color: #f59e0b; }
+.star-label { font-size: 13px; color: #888; margin-bottom: 1rem; }
+textarea { width: 100%; min-height: 100px; padding: 12px; border: 1.5px solid #e5e5e5; border-radius: 10px; font-size: 14px; font-family: inherit; color: #333; background: #fafafa; resize: vertical; outline: none; }
+textarea:focus { border-color: #3b82f6; background: #fff; }
+.nav-row { display: flex; gap: 8px; margin-top: 1.5rem; }
+.btn-next { flex: 1; background: #3b82f6; color: white; border: none; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.btn-next:disabled { background: #93c5fd; cursor: default; }
+.btn-back { background: #f5f4f0; border: none; border-radius: 10px; padding: 13px 18px; font-size: 14px; color: #666; cursor: pointer; }
+.thanks { text-align: center; padding: 1rem 0; }
+.thanks-icon { font-size: 56px; margin-bottom: 1rem; }
+.thanks h2 { font-size: 18px; font-weight: 700; margin-bottom: 0.5rem; }
+.thanks p { font-size: 14px; color: #666; margin-bottom: 1.5rem; line-height: 1.6; }
+.sending { text-align: center; padding: 2rem 0; color: #888; font-size: 14px; }
+.spinner { width: 32px; height: 32px; border: 3px solid #e5e5e5; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 1rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.step-counter { font-size: 12px; color: #aaa; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+<div class="card" id="root"></div>
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyRZMmBph9D6j4o-bouLTWaINFUcpaGbyKDpT9TwCsLTxnYqGoDDLsOGnEI_GBP81Il/exec';
+const questions = [
+  { id: 'visitor_type', type: 'single', label: 'あなたはどちらですか？', options: ['観光客（旅行者）', '地元住民'] },
+  { id: 'overall', type: 'star', label: 'この観光地の総合満足度を教えてください' },
+  { id: 'access', type: 'single', label: 'アクセスの便利さはいかがでしたか？', options: ['とても良い', '良い', '普通', '悪い', 'とても悪い'] },
+  { id: 'cleanliness', type: 'single', label: '清潔さ・環境の整備はいかがでしたか？', options: ['とても良い', '良い', '普通', '悪い', 'とても悪い'] },
+  { id: 'recommend', type: 'single', label: '友人や家族にこの観光地を勧めますか？', options: ['強く勧める', '勧める', 'どちらでもない', 'あまり勧めない', '勧めない'] },
+  { id: 'comment', type: 'text', label: 'ご意見・ご感想（任意）', placeholder: '自由にご記入ください' }
+];
+let step = 0, answers = {}, phase = 'survey';
+function render() {
+  const root = document.getElementById('root');
+  if (phase === 'sending') { root.innerHTML = '<div class="sending"><div class="spinner"></div>送信中...</div>'; return; }
+  if (phase === 'thanks') { root.innerHTML = '<div class="thanks"><div class="thanks-icon">🎉</div><h2>ご回答ありがとうございました！</h2><p>皆さまのご意見を参考に、より良い観光地づくりに取り組んでまいります。</p><button class="btn-next" id="btn-again">もう一度回答する</button></div>'; document.getElementById('btn-again').onclick = () => { step=0; answers={}; phase='survey'; render(); }; return; }
+  if (phase === 'error') { root.innerHTML = '<div class="sending"><p style="color:#dc2626;margin-bottom:1rem;">送信に失敗しました</p><button class="btn-next" onclick="submitAnswers()" style="max-width:200px;margin:0 auto;display:block;">再送信する</button></div>'; return; }
+  const q = questions[step];
+  const pct = Math.round((step / questions.length) * 100);
+  let body = '';
+  if (q.type === 'single') {
+    body = q.options.map(o => '<button class="option-btn' + (answers[q.id]===o?' selected':'') + '" data-v="' + o + '"><span class="radio-dot"><span class="radio-inner"></span></span>' + o + '</button>').join('');
+  } else if (q.type === 'star') {
+    const cur = answers[q.id] || 0;
+    const labels = ['','不満','やや不満','普通','良い','とても良い'];
+    body = '<div class="star-row">' + [1,2,3,4,5].map(i => '<span class="star' + (i<=cur?' on':'') + '" data-s="' + i + '">★</span>').join('') + '</div><div class="star-label">' + (cur?labels[cur]:'星をタップしてください') + '</div>';
+  } else {
+    body = '<textarea id="txt" placeholder="' + (q.placeholder||'') + '">' + (answers[q.id]||'') + '</textarea>';
+  }
+  const isLast = step === questions.length - 1;
+  const canNext = q.type==='text' || answers[q.id];
+  root.innerHTML = '<h1>観光地アンケート</h1><p class="subtitle">皆さまのご意見をお聞かせください</p><div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div><p class="step-counter">' + (step+1) + ' / ' + questions.length + '</p><p class="q-label">' + q.label + '</p>' + body + '<div class="nav-row">' + (step>0?'<button class="btn-back" id="bb">戻る</button>':'') + '<button class="btn-next" id="bn"' + (canNext?'':' disabled') + '>' + (isLast?'送信する':'次へ') + '</button></div>';
+  document.querySelectorAll('.option-btn').forEach(btn => btn.onclick = () => { answers[q.id] = btn.dataset.v; render(); });
+  document.querySelectorAll('.star').forEach(s => {
+    s.onclick = () => { answers[q.id] = parseInt(s.dataset.s); render(); };
+    s.onmouseenter = () => { const v=parseInt(s.dataset.s); document.querySelectorAll('.star').forEach(x => x.classList.toggle('on', parseInt(x.dataset.s)<=v)); };
+  });
+  const sr = document.querySelector('.star-row');
+  if (sr) sr.onmouseleave = () => { const c=answers[q.id]||0; document.querySelectorAll('.star').forEach(x => x.classList.toggle('on', parseInt(x.dataset.s)<=c)); };
+  const txt = document.getElementById('txt');
+  if (txt) txt.oninput = e => { answers[q.id] = e.target.value; };
+  const bn = document.getElementById('bn');
+  if (bn) bn.onclick = () => { if (step < questions.length-1) { step++; render(); } else submitAnswers(); };
+  const bb = document.getElementById('bb');
+  if (bb) bb.onclick = () => { step--; render(); };
+}
+async function submitAnswers() {
+  phase = 'sending'; render();
+  try {
+    await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: {'Content-Type':'application/json'}, body: JSON.stringify(answers) });
+    phase = 'thanks'; render();
+  } catch(e) { phase = 'error'; render(); }
+}
+render();
+</script>
+</body>
+</html>
